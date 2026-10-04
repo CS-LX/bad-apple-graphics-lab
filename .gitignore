@@ -1,0 +1,42 @@
+# Local Python environments and generated caches
+.venv/
+venv/
+.preview-deps/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+
+# Source media, extracted frames and local fonts are not redistributed
+assets/*
+!assets/README.md
+!assets/.gitkeep
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.avi
+*.mp3
+*.wav
+*.aac
+*.flac
+*.ttf
+*.otf
+*.ttc
+
+# Renders, local galleries, previews, QA artifacts and logs
+output/
+deliverables/
+previews/
+logs/
+*.log
+
+# Local configuration and editor/OS files
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
