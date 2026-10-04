@@ -15,13 +15,18 @@ import subprocess
 import time
 from fractions import Fraction
 from video_common import ROOT, FFMPEG, CREATE_NO_WINDOW, probe
+from presentation import WARNING_SECONDS
 import numpy as np
 from PIL import Image
 from scipy.signal import correlate
 
 FPS=30
 SOURCE_FRAMES=6572
-WARNING_FRAMES=150
+WARNING_FRAMES=round(WARNING_SECONDS*FPS)
+WARNING_SAMPLE_FRAMES=(0,WARNING_FRAMES//2,WARNING_FRAMES-1)
+BODY_SOURCE_SECONDS=51
+BODY_SOURCE_FRAME=round(BODY_SOURCE_SECONDS*FPS)
+BODY_RELEASE_FRAME=BODY_SOURCE_FRAME+WARNING_FRAMES
 RATE=8000
 ITEMS=[
     ('A','A_quadtree_events.mp4','A_tree.mp4'),
@@ -84,7 +89,7 @@ def difference(a,b):
             'psnr_db':float(10*math.log10(255**2/mse)) if mse else 100.0}
 
 def warning_check(decoded,intermediates):
-    static=[difference(decoded[0],decoded[n]) for n in (75,149)]
+    static=[difference(decoded[0],decoded[n]) for n in WARNING_SAMPLE_FRAMES[1:]]
     assert max(d['mae'] for d in static)<.7,f'Warning card is not static: {static}'
     card=intermediates/'warning_960x720.png'
     if card.is_file():
@@ -101,28 +106,32 @@ def warning_check(decoded,intermediates):
         similarity=difference(np.asarray(reduced),np.asarray(generated))
         method='Regenerated warning design at 64x48; tolerates font rasterization differences'
         assert similarity['mae']<5.0,f'Card layout differs from warning design: {similarity}'
-    transition=difference(decoded[149],decoded[150])
-    assert transition['mae']>3.0,'Frame 150 still resembles the warning card'
-    return {'status':'passed','checked_frame_indices':[0,75,149],
+    transition=difference(decoded[WARNING_FRAMES-1],decoded[WARNING_FRAMES])
+    assert transition['mae']>3.0,f'Frame {WARNING_FRAMES} still resembles the warning card'
+    return {'status':'passed','checked_frame_indices':list(WARNING_SAMPLE_FRAMES),
             'static_differences_from_frame_0':static,'reference':method,
-            'reference_difference':similarity,'frame_149_to_150_difference':transition,
+            'reference_difference':similarity,'warning_to_body_difference':transition,
+            'transition_frame_indices':[WARNING_FRAMES-1,WARNING_FRAMES],
             'limits':{'static_mae_max':.7,'saved_card_mae_max':2.0,
                       'regenerated_card_layout_mae_max':5.0}}
 
 def body_check(decoded,path):
     if not path.is_file():
         return {'status':'skipped','reason':'Silent intermediate absent; release-only checks still run'}
-    original=frames(path,[0,1529,1530,1531])
-    first=difference(decoded[150],original[0])
-    correct=difference(decoded[1680],original[1530])
-    neighbours={str(i-1530):difference(decoded[1680],original[i]) for i in (1529,1530,1531)}
+    source_neighbours=(BODY_SOURCE_FRAME-1,BODY_SOURCE_FRAME,BODY_SOURCE_FRAME+1)
+    original=frames(path,[0,*source_neighbours])
+    first=difference(decoded[WARNING_FRAMES],original[0])
+    correct=difference(decoded[BODY_RELEASE_FRAME],original[BODY_SOURCE_FRAME])
+    neighbours={str(i-BODY_SOURCE_FRAME):difference(decoded[BODY_RELEASE_FRAME],original[i])
+                for i in source_neighbours}
     assert first['mae']<4.0,f'First body frame differs from original frame zero: {first}'
     assert correct['mae']<4.0 and correct['psnr_db']>30.0,f'Body frame alignment/image mismatch: {correct}'
     assert (correct['mae']<=min(neighbours['-1']['mae'],neighbours['1']['mae'])+.15), \
         'Expected source frame is not the closest temporal match'
-    return {'status':'passed','first_body_frame_index':150,
-            'first_frame_difference':first,'source_frame_index':1530,
-            'release_frame_index':1680,'source_seconds':51,'release_seconds':56,
+    return {'status':'passed','first_body_frame_index':WARNING_FRAMES,
+            'first_frame_difference':first,'source_frame_index':BODY_SOURCE_FRAME,
+            'release_frame_index':BODY_RELEASE_FRAME,'source_seconds':BODY_SOURCE_SECONDS,
+            'release_seconds':BODY_SOURCE_SECONDS+WARNING_SECONDS,
             'difference':correct,'adjacent_source_frame_differences':neighbours,
             'limits':{'mae_max':4.0,'psnr_db_min':30.0,'closest_frame_mae_tolerance':.15}}
 
@@ -150,13 +159,14 @@ def correlation(a,b,max_lag=80):
 
 def audio_check(path,source_pcm):
     audio=pcm(path)
-    silence=audio[:5*RATE]
-    body=audio[5*RATE:]
+    intro_samples=round(WARNING_SECONDS*RATE)
+    silence=audio[:intro_samples]
+    body=audio[intro_samples:]
     rms=float(np.sqrt(np.mean(silence**2)))
     peak=float(np.max(np.abs(silence)))
     reference_rms=float(np.sqrt(np.mean(source_pcm**2)))
     maximum_rms=max(1e-4,.01*reference_rms)
-    assert len(silence)==5*RATE,'Missing warning audio interval'
+    assert len(silence)==intro_samples,'Missing warning audio interval'
     assert rms<=maximum_rms,f'Warning audio is not near silence: RMS {rms}'
     assert abs(len(body)-len(source_pcm))<=RATE*.1,'Audio body length differs by more than 0.1 seconds'
     global_result=correlation(body,source_pcm)
@@ -172,7 +182,7 @@ def audio_check(path,source_pcm):
                 f'Audio drift/content mismatch in window: {segment}'
             windows.append(segment)
     return {'status':'passed','decoded_rate_hz':RATE,'channels':1,
-            'removed_intro_samples':5*RATE,'intro_rms':rms,'intro_peak':peak,
+            'removed_intro_samples':intro_samples,'intro_rms':rms,'intro_peak':peak,
             'intro_rms_dbfs':20*math.log10(rms) if rms>0 else -200.0,
             'intro_rms_limit':maximum_rms,'global':global_result,'windows':windows,
             'source_samples':len(source_pcm),'body_samples':len(body)}
@@ -186,7 +196,8 @@ def main():
     args=parser.parse_args()
     report_path=args.report or args.deliverables/'release_qa.json'
     report={'created_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            'status':'running','files':{},'failed_checks':[],
+            'status':'running','warning_seconds':WARNING_SECONDS,
+            'warning_frames':WARNING_FRAMES,'files':{},'failed_checks':[],
             'limits':[
                 'This checks file integrity and sampled visual/audio alignment, not medical safety.',
                 'Warning text is compared visually to the generated design; no OCR is performed.',
@@ -222,7 +233,7 @@ def main():
         if letter!='D':
             decoded=None
             try:
-                decoded=frames(path,[0,75,149,150,1680])
+                decoded=frames(path,[*WARNING_SAMPLE_FRAMES,WARNING_FRAMES,BODY_RELEASE_FRAME])
             except Exception as error:
                 report['failed_checks'].append(letter+' frame extraction')
                 entry['frame_extraction']={'status':'failed','error':str(error)}

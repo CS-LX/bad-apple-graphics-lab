@@ -9,11 +9,14 @@ from pathlib import Path
 import argparse,subprocess,sys,time
 from fractions import Fraction
 from video_common import ROOT,CREATE_NO_WINDOW,probe
+from presentation import WARNING_SECONDS
+
+WARNING_FRAMES=round(WARNING_SECONDS*30)
 
 JOBS=[
-    ('A_tree.mp4','A_quadtree_events.mp4',150,['render_fields.py','tree']),
-    ('B_sdf.mp4','B_sdf_time_derivative.mp4',150,['render_fields.py','sdf']),
-    ('C_mesh.mp4','C_delaunay_connectivity.mp4',150,['render_mesh.py']),
+    ('A_tree.mp4','A_quadtree_events.mp4',WARNING_FRAMES,['render_fields.py','tree']),
+    ('B_sdf.mp4','B_sdf_time_derivative.mp4',WARNING_FRAMES,['render_fields.py','sdf']),
+    ('C_mesh.mp4','C_delaunay_connectivity.mp4',WARNING_FRAMES,['render_mesh.py']),
     ('D_spacetime.mp4','D_spacetime_bsp.mp4',0,['render_spacetime.py']),
 ]
 

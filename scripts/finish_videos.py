@@ -35,18 +35,19 @@ def completed(path,frames,size=(960,720)):
 
 def prepend_warning(body,target,size=(960,720),duration=SOURCE_FRAMES/FPS,
                     audio_source=SOURCE,audio_start=0,body_start=0,card=None):
-    """Render five silent seconds, then begin picture and soundtrack together."""
+    """Render the silent warning, then begin picture and soundtrack together."""
     frames=round(duration*FPS)+WARNING_SECONDS*FPS
     card=card or save_warning(size)
     temp=target.with_name(target.stem+'.pending.mp4')
     cmd=[FFMPEG,'-hide_banner','-loglevel','error','-y','-filter_complex_threads','1',
          '-threads','2','-ss',str(body_start),'-i',str(body),
          '-loop','1','-framerate',str(FPS),'-i',str(card),
-         '-threads','1','-ss',str(audio_start),'-i',str(audio_source)]
+         '-threads','1','-i',str(audio_source)]
     filt=(f'[1:v]trim=duration={WARNING_SECONDS},setpts=PTS-STARTPTS,setsar=1,format=yuv420p[w];'
           f'[0:v]trim=duration={duration},setpts=PTS-STARTPTS,setsar=1,format=yuv420p[b];'
           '[w][b]concat=n=2:v=1:a=0[v];'
-          f'[2:a]atrim=duration={duration},asetpts=PTS-STARTPTS,adelay={WARNING_SECONDS*1000}:all=1[a]')
+          f'[2:a]atrim=start={audio_start}:duration={duration},asetpts=N/SR/TB,'
+          f'adelay={WARNING_SECONDS*1000}:all=1,aresample=async=1:first_pts=0[a]')
     cmd+=['-filter_complex',filt,'-map','[v]','-map','[a]',
           '-c:v','libx264','-preset','fast','-crf','18','-threads','3','-pix_fmt','yuv420p',
           '-c:a','aac','-b:a','192k','-ar','44100','-frames:v',str(frames),
@@ -103,27 +104,29 @@ def comparison(force=False):
               '-frames:v',str(total),'-t',str(total/FPS),'-pix_fmt','yuv420p','-movflags','+faststart',str(temp)]
         run(cmd);check_video(temp,total,(1280,960));temp.replace(target)
     preview=DEST/'preview_12s.mp4'
-    if force or not completed(preview,17*FPS,(1280,960)) or target.stat().st_mtime>preview.stat().st_mtime:
-        prepend_warning(target,preview,(1280,960),12,audio_source=SOURCE,audio_start=45,body_start=50)
+    if force or not completed(preview,(12+WARNING_SECONDS)*FPS,(1280,960)) or target.stat().st_mtime>preview.stat().st_mtime:
+        prepend_warning(target,preview,(1280,960),12,audio_source=SOURCE,audio_start=45,body_start=45+WARNING_SECONDS)
     for i,(_,name,_,_,_) in enumerate(ITEMS):
         poster=DEST/(Path(name).stem+'.jpg')
-        run([FFMPEG,'-hide_banner','-loglevel','error','-y','-ss',str(51+(5 if i<3 else 0)),
+        run([FFMPEG,'-hide_banner','-loglevel','error','-y','-ss',str(51+(WARNING_SECONDS if i<3 else 0)),
              '-i',str(DEST/name),'-frames:v','1','-q:v','2',str(poster)])
-    run([FFMPEG,'-hide_banner','-loglevel','error','-y','-ss','56','-i',str(target),
+    run([FFMPEG,'-hide_banner','-loglevel','error','-y','-ss',str(51+WARNING_SECONDS),'-i',str(target),
          '-frames:v','1','-q:v','2',str(DEST/'comparison.jpg')])
 
 def gallery():
     DEST.mkdir(exist_ok=True);cards=[]
     for i,(_,name,title,_,detail) in enumerate(ITEMS):
-        poster=Path(name).stem+'.jpg';notice='含5秒静态光敏性癫痫警告片头。' if i<3 else ''
+        poster=Path(name).stem+'.jpg';notice=f'含{WARNING_SECONDS}秒静态光敏性癫痫警告片头。' if i<3 else ''
         cards.append(f'<section><h2>{title}</h2><video controls playsinline preload="metadata" poster="{poster}" src="{name}"></video><p>{detail}{notice}</p><a href="{name}" download>下载完整视频</a></section>')
-    html='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bad Apple · 四种计算图形</title><style>body{margin:0;padding:32px;background:#080d17;color:#e9f1f7;font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1280px;margin:auto}h1{font-size:32px;font-weight:500;margin:0}h2{font-size:22px;font-weight:500;margin:30px 0 14px}p{color:#aabecf}a{color:#73d8e9}video{display:block;width:100%;background:#060b14}section{min-width:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:32px}footer{margin-top:48px;color:#8da4b8;font-size:14px}nav{margin:16px 0 22px}nav a{margin-right:20px}@media(max-width:800px){body{padding:18px}.grid{grid-template-columns:1fr}h1{font-size:26px}}</style><main><h1>Bad Apple · 四种计算图形</h1><p>四部完整实验视频 / 原曲同步 / 960×720 / 30fps。A、B、C片头含5秒静态光敏性癫痫警告。</p><nav><a href="00_four_way_comparison.mp4" download>下载四画面对比版</a><a href="validation.json">查看输出校验</a><a href="project.json">算法与复现信息</a></nav><p>以下对比版也包含5秒警告；左上A、右上B、左下C、右下D。</p><video controls playsinline preload="metadata" poster="comparison.jpg" src="00_four_way_comparison.mp4"></video><div class="grid">'''+''.join(cards)+'''</div><footer>原作动画：あにら（Anira）。音乐：Bad Apple!! feat.nomico / Alstroemeria Records。<br>以上为算法可视化实验，不构成全网首创声明。<br>素材来源：<a href="https://github.com/NPCat/bad-apple-bot">NPCat/bad-apple-bot</a>。源码与说明：<a href="https://github.com/CS-LX/bad-apple-graphics-lab">GitHub</a>。观看时播放一个视频会暂停其他视频。</footer></main><script>document.querySelectorAll('video').forEach(v=>v.addEventListener('play',()=>{document.querySelectorAll('video').forEach(o=>{if(o!==v)o.pause();});}));</script></html>'''
+    html='''<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bad Apple · 四种计算图形</title><style>body{margin:0;padding:32px;background:#080d17;color:#e9f1f7;font:16px/1.75 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1280px;margin:auto}h1{font-size:32px;font-weight:500;margin:0}h2{font-size:22px;font-weight:500;margin:30px 0 14px}p{color:#aabecf}a{color:#73d8e9}video{display:block;width:100%;background:#060b14}section{min-width:0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:32px}footer{margin-top:48px;color:#8da4b8;font-size:14px}nav{margin:16px 0 22px}nav a{margin-right:20px}@media(max-width:800px){body{padding:18px}.grid{grid-template-columns:1fr}h1{font-size:26px}}</style><main><h1>Bad Apple · 四种计算图形</h1><p>四部完整实验视频 / 原曲同步 / 960×720 / 30fps。A、B、C片头含__WARNING_SECONDS__秒静态光敏性癫痫警告。</p><nav><a href="00_four_way_comparison.mp4" download>下载四画面对比版</a><a href="validation.json">查看输出校验</a><a href="project.json">算法与复现信息</a></nav><p>以下对比版也包含__WARNING_SECONDS__秒警告；左上A、右上B、左下C、右下D。</p><video controls playsinline preload="metadata" poster="comparison.jpg" src="00_four_way_comparison.mp4"></video><div class="grid">'''+''.join(cards)+'''</div><footer>原作动画：あにら（Anira）。音乐：Bad Apple!! feat.nomico / Alstroemeria Records。<br>以上为算法可视化实验，不构成全网首创声明。<br>素材来源：<a href="https://github.com/NPCat/bad-apple-bot">NPCat/bad-apple-bot</a>。源码与说明：<a href="https://github.com/CS-LX/bad-apple-graphics-lab">GitHub</a>。观看时播放一个视频会暂停其他视频。</footer></main><script>document.querySelectorAll('video').forEach(v=>v.addEventListener('play',()=>{document.querySelectorAll('video').forEach(o=>{if(o!==v)o.pause();});}));</script></html>'''
+    html=html.replace('__WARNING_SECONDS__',str(WARNING_SECONDS))
     (DEST/'index.html').write_text(html,encoding='utf8')
     data={'source':'https://github.com/NPCat/bad-apple-bot','source_video_frames':SOURCE_FRAMES,
           'source_video_duration_seconds':SOURCE_FRAMES/FPS,'warning_seconds':WARNING_SECONDS,
           'warning_applies_to':['A','B','C','comparison','preview'],
+          'warning_style':{'font':'bold Hei / sans serif','border':False,'static':True},
           'warning_reference':'https://www.epilepsy.com/what-is-epilepsy/seizure-triggers/photosensitivity',
-          'audio':'A/B/C and comparison: source delayed by 5 seconds and encoded once to AAC 192k. D: original AAC copied.',
+          'audio':f'A/B/C and comparison: source delayed by {WARNING_SECONDS} seconds and encoded once to AAC 192k. D: original AAC copied.',
           'algorithms':[{'video':name,'title':title,'description':detail} for _,name,title,_,detail in ITEMS],
           'reproduce_all':'python scripts/render_all.py','dependencies':'requirements.txt; FFmpeg and ffprobe on PATH, or FFMPEG_BIN/FFPROBE_BIN.',
           'source_code':'https://github.com/CS-LX/bad-apple-graphics-lab',

@@ -77,24 +77,24 @@ python scripts/render_all.py --force
 | `deliverables/C_delaunay_connectivity.mp4` | C：持续网格连边变化 |
 | `deliverables/D_spacetime_bsp.mp4` | D：时空 BSP 叶块 |
 | `deliverables/00_four_way_comparison.mp4` | 四画面对比 |
-| `deliverables/preview_12s.mp4` | 12 秒正文加 5 秒静态提示，共 17 秒 |
+| `deliverables/preview_12s.mp4` | 12 秒正文加 3 秒静态提示，共 15 秒 |
 | `deliverables/index.html` | 本地观看页，可直接用浏览器打开 |
 | `deliverables/validation.json` | 打包时的帧数、尺寸、时长等检查 |
 | `deliverables/project.json` | 算法说明与运行环境记录 |
 
 单版正文为 960×720、30 fps；四画面对比版为 1280×960。音轨由输入素材合入。`output/` 的渲染中间视频不带音轨。
 
-发布包装中，**A、B、C，以及包含这些画面的对比版，片头加入 5 秒静态光敏提示**；D 只保留画面中的 `x`、`y`、`time +2s` 轴说明。提示期间无声，A/B/C 的正文与音轨一起后移 5 秒，音轨转码一次 AAC；D 直接复制源音轨。对比版会去掉 A/B/C 已有片头后同步拼接，再统一添加一次提示，避免 D 提前播放。
+发布包装中，**A、B、C，以及包含这些画面的对比版，片头加入 3 秒静态光敏提示**；D 只保留画面中的 `x`、`y`、`time +2s` 轴说明。提示期间无声，A/B/C 的正文与音轨一起后移 3 秒，音轨转码一次 AAC；D 直接复制源音轨。对比版会去掉 A/B/C 已有片头后同步拼接，再统一添加一次提示，避免 D 提前播放。
 
 | 发布文件 | 帧数 | 视频时长 |
 | --- | ---: | ---: |
-| A / B / C | 6722 | 约 224.066667 秒 |
+| A / B / C | 6662 | 约 222.066667 秒 |
 | D | 6572 | 约 219.066667 秒 |
-| 四画面对比 | 6722 | 约 224.066667 秒 |
+| 四画面对比 | 6662 | 约 222.066667 秒 |
 
 四个正文渲染中间文件仍各为 6572 帧。
 
-警告卡的中英文文案与版式见 [scripts/presentation.py](scripts/presentation.py)。卡片保持静止，不闪烁，也不播放倒计时动画。
+警告卡的中英文文案与版式见 [scripts/presentation.py](scripts/presentation.py)。卡片采用粗体黑体、无边框，保持静止和无声，不闪烁，也不播放倒计时动画。
 
 ## 四种方法
 
@@ -173,7 +173,7 @@ python scripts/render_spacetime.py --start 45 --duration 6 --output output/test_
 python scripts/validate_release.py
 ```
 
-它检查四部成片的帧数与完整解码、A/B/C 静态警告及正文起点、5 秒静音与原曲偏移、D 原音轨直拷，输出 `deliverables/release_qa.json`。如果无声中间文件已清理，仅跳过依赖中间片的画面对照；保留输入素材时其余核心检查仍可运行。
+它检查四部成片的帧数与完整解码、A/B/C 静态警告及正文起点、3 秒静音与原曲偏移、D 原音轨直拷，输出 `deliverables/release_qa.json`。如果无声中间文件已清理，仅跳过依赖中间片的画面对照；保留输入素材时其余核心检查仍可运行。
 
 完整交付并检查后，可以删除 `output/`、`logs/`、`previews/` 和 `assets/frame_*.png`。保留 `deliverables/`、`assets/bad_apple.mp4`、脚本和 Python 运行环境。
 
